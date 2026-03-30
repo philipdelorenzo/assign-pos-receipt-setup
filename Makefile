@@ -15,7 +15,7 @@ install: ##@repo Installs needed prerequisites and software to develop in the SR
 	@asdf reshim
 
 run: ##@repo Run the server to manage JIRA tickets
-	@./.python/bin/python src/jira_tickets.py
+	@./.python/bin/python src/jira_watcher.py
 
 format: ##@repo Format code
 	$(info ********** Formatting Code **********)
