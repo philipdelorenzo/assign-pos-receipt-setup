@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -euo pipefail
+
+source ${HOME}/.bash_profile
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+JIRA_WATCHER_SRC=${HOME}/.pgz/jira_watcher
+PYTHON=${JIRA_WATCHER_SRC}/.python/bin
+
+/opt/homebrew/bin/doppler run --project organization \
+    --config org \
+    --command "${PYTHON}/python ${JIRA_WATCHER_SRC}/jira_watcher.py"

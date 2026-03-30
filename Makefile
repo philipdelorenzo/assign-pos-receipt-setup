@@ -26,6 +26,34 @@ run-tests: ##@repo Run tests
 	$(info ********** Running Tests **********)
 	@bash test/run_tests.sh -u
 
+jira-watcher-install: ##@repo Install the Service to Mac System
+	@echo "[INFO] - Preparing installation directory..."
+	@mkdir -p ${HOME}/.pgz/jira_watcher
+	
+	@echo "[INFO] - Syncing source files..."
+	@rsync -avz --delete src/jira_watcher.py ${HOME}/.pgz/jira_watcher/jira_watcher.py
+	@rsync -avz --delete src/config.ini ${HOME}/.pgz/jira_watcher/config.ini
+	@rsync -avz --delete src/test_printer.py ${HOME}/.pgz/jira_watcher/test_printer.py
+	@rsync -avz --delete src/jira_watcher ${HOME}/.pgz/jira_watcher/jira_watcher
+	
+	@echo "[INFO] - Setting up Python environment..."
+	@bash bin/install-launcher -p
+	
+	@echo "[INFO] - Fixing macOS binary permissions and signing..."
+	@pkill -9 -f jira_watcher || true
+	@sudo xattr -c "${HOME}/.pgz/jira_watcher/.python/bin/python"
+	@sudo codesign --force -s - "${HOME}/.pgz/jira_watcher/.python/bin/python"
+	
+	@echo "[INFO] - Installing binaries and plists..."
+	@sudo chmod +x ${HOME}/.pgz/jira_watcher/jira_watcher
+	@cp src/jira_watcher.plist ~/Library/LaunchAgents/com.user.jirawatcher.plist
+	
+	@echo "[INFO] - Restarting LaunchAgent..."
+	-@launchctl bootout gui/$(shell id -u) ~/Library/LaunchAgents/com.user.jirawatcher.plist 2>/dev/null
+	@launchctl bootstrap gui/$(shell id -u) ~/Library/LaunchAgents/com.user.jirawatcher.plist
+	@launchctl kickstart -k gui/$(shell id -u)/com.user.jirawatcher
+	@echo "[SUCCESS] - jira-watcher is running."
+
 ############# Development Section #############
 help: ##@misc Show this help.
 	@echo $(MAKEFILE_LIST)

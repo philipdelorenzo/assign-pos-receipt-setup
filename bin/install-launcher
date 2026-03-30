@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Copyright (c) 2024, Philip De Lorenzo
+# All rights reserved.
+
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree. 
+
+set -eo pipefail
+
+BASE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+MAIN="${HOME}/.pgz/jira_watcher"
+PYTHON=$(command -v python)
+
+python_installation()
+{
+    python -m virtualenv "${MAIN}/.python" --symlinks
+    "${MAIN}"/.python/bin/pip install --upgrade pip
+    "${MAIN}"/.python/bin/python -m pip install -r src/requirements.txt
+}
+
+completed()
+{
+    echo "[INFO] - Script complete!"
+}
+
+usage() { echo "Usage: $0 [-a asdf] [-p [Python Install Flag]]" 1>&2; exit 1; }
+
+while getopts ":ap" arg; do
+    case "${arg}" in
+        p)
+            python_installation
+            completed
+            ;;
+        \?)
+            echo "[ERROR] - Unknown flag passed"
+            usage
+            ;;
+        :)
+            echo "[ERROR] - Option -${arg} requires an argument." >&2
+            exit 1
+            ;;
+        *)
+            usage
+    esac
+done
+
+unset_data()
+{
+    unset _GROUP
+    unset BASE
+    unset _INFO_NAME
+    unset LOCATION
+    unset _PUBLICFILENAME
+}
+
+# Let's clean up the data.
+unset_data
+
+shift $((OPTIND-1))
