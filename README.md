@@ -13,3 +13,9 @@ make install
 ```bash
 make run
 ```
+
+## Install JIRA POS Printing Launchd Service
+
+```bash
+make jira-watcher-install
+```
