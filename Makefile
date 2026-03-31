@@ -32,6 +32,7 @@ jira-watcher-install: ##@repo Install the Service to Mac System
 	
 	@echo "[INFO] - Syncing source files..."
 	@rsync -avz --delete src/jira_watcher.py ${HOME}/.pgz/jira_watcher/jira_watcher.py
+	@rsync -avz --delete src/print_jira.py ${HOME}/.pgz/jira_watcher/print_jira.py
 	@rsync -avz --delete src/config.ini ${HOME}/.pgz/jira_watcher/config.ini
 	@rsync -avz --delete src/test_printer.py ${HOME}/.pgz/jira_watcher/test_printer.py
 	@rsync -avz --delete src/jira_watcher ${HOME}/.pgz/jira_watcher/jira_watcher
