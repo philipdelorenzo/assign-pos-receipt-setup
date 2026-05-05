@@ -28,6 +28,7 @@ run-tests: ##@repo Run tests
 
 jira-watcher-install: ##@repo Install the Service to Mac System
 	@echo "[INFO] - Preparing installation directory..."
+	@rm -rf ${HOME}/.pgz/jira_watcher
 	@mkdir -p ${HOME}/.pgz/jira_watcher
 	
 	@echo "[INFO] - Syncing source files..."
