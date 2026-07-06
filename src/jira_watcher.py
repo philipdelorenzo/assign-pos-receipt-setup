@@ -6,8 +6,10 @@ import socket
 import sys
 import textwrap
 import re
+
 from jira import JIRA
 from dopplersdk import DopplerSDK
+from contextlib import closing
 
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -83,13 +85,12 @@ def get_last_status(issue_id):
         return res[0] if res else None
 
 
-def update_status(issue_id, status):
-    with sqlite3.connect(DB_PATH) as conn:
+def update_status(issue_id, status, printed=True):
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO ticket_state (id, last_status) VALUES (?, ?)",
-            (issue_id, status),
+            "INSERT OR REPLACE INTO ticket_state (id, last_status, printed) VALUES (?, ?, ?)",
+            (issue_id, status, printed),
         )
-
 
 # --- PRINTING ENGINE ---
 def print_ticket(issue):
@@ -169,7 +170,7 @@ while True:
     try:
         # Search for tickets assigned to user that are not Done
         issues = jira.search_issues(
-            f'assignee = "{JIRA_EMAIL}" AND statusCategory != "Done"', maxResults=10
+            f'assignee = "{JIRA_EMAIL}" AND statusCategory != "Done"', maxResults=100
         )
 
         for issue in issues:
