@@ -170,7 +170,7 @@ while True:
     try:
         # Search for tickets assigned to user that are not Done
         issues = jira.search_issues(
-            f'assignee = "{JIRA_EMAIL}" AND statusCategory != "Done"', maxResults=10
+            f'assignee = "{JIRA_EMAIL}" AND statusCategory != "Done"', maxResults=100
         )
 
         for issue in issues:
