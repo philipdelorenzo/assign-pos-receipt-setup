@@ -37,6 +37,7 @@ jira-watcher-install: ##@repo Install the Service to Mac System
 	@rsync -avz --delete src/config.ini ${HOME}/.pgz/jira_watcher/config.ini
 	@rsync -avz --delete src/test_printer.py ${HOME}/.pgz/jira_watcher/test_printer.py
 	@rsync -avz --delete src/jira_watcher ${HOME}/.pgz/jira_watcher/jira_watcher
+	@rsync -avz --delete src/set_all_to_printed.py ${HOME}/.pgz/jira_watcher/set_all_to_printed.py
 	
 	@echo "[INFO] - Setting up Python environment..."
 	@bash bin/install-launcher -p
