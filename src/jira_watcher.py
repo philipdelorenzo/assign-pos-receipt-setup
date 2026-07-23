@@ -9,7 +9,6 @@ import re
 
 from jira import JIRA
 from dopplersdk import DopplerSDK
-from contextlib import closing
 
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -73,20 +72,20 @@ jira = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_EMAIL, _jira_token))
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS ticket_state (id TEXT PRIMARY KEY, last_status TEXT)"
+            "CREATE TABLE IF NOT EXISTS ticket_state (id TEXT PRIMARY KEY, last_status TEXT, printed INTEGER)"
         )
 
 
 def get_last_status(issue_id):
     with sqlite3.connect(DB_PATH) as conn:
         res = conn.execute(
-            "SELECT last_status FROM ticket_state WHERE id=?", (issue_id,)
+            "SELECT last_status, printed FROM ticket_state WHERE id=?", (issue_id,)
         ).fetchone()
-        return res[0] if res else None
+        return res if res else (None, 0)
 
 
 def update_status(issue_id, status, printed=True):
-    with closing(sqlite3.connect(DB_PATH)) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO ticket_state (id, last_status, printed) VALUES (?, ?, ?)",
             (issue_id, status, printed),
@@ -175,14 +174,19 @@ while True:
 
         for issue in issues:
             current_cat = issue.fields.status.statusCategory.name
-            last_cat = get_last_status(issue.id)
+            last_cat, is_printed = get_last_status(issue.id)
+            print(is_printed)
 
             # Trigger logic: If it just moved into 'To Do'
-            if current_cat == "To Do" and last_cat != "To Do":
+            if current_cat == "To Do" and not is_printed:
                 print(f"TRANSITION: {issue.key} -> To Do. Printing...")
                 print_ticket(issue)
-
-            update_status(issue.id, current_cat)
+                update_status(issue.id, current_cat, printed=1)
+            else:
+                # If it's already printed and still in To Do, keep it as 1.
+                # If it moved out of To Do, reset it to 0.
+                printed_flag = 1 if current_cat == "To Do" else 0
+                update_status(issue.id, current_cat, printed=printed_flag)
 
     except Exception as e:
         print(f"LOOP ERROR: {e}")
