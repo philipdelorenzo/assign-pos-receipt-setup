@@ -175,7 +175,6 @@ while True:
         for issue in issues:
             current_cat = issue.fields.status.statusCategory.name
             last_cat, is_printed = get_last_status(issue.id)
-            print(is_printed)
 
             # Trigger logic: If it just moved into 'To Do'
             if current_cat == "To Do" and not is_printed:
