@@ -2,13 +2,17 @@ import sqlite3
 import os
 import configparser
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read(os.path.join(BASE_DIR, "config.ini"))
 
 database_name = config["config"]["db_name"]
+home_dir = os.path.expanduser(os.path.join("~", config["config"]["home"]))
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.expanduser(os.path.join(BASE_DIR, database_name))
+# Anchored to the same HOME_DIR jira_watcher.py uses, not BASE_DIR, so this
+# operates on whichever database the running watcher actually reads/writes.
+DB_PATH = os.path.join(home_dir, database_name)
 
 def set_all_to_printed():
     try:

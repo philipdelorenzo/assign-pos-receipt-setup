@@ -6,14 +6,14 @@ import socket
 import sys
 import textwrap
 import re
+import fcntl
+import contextlib
 
 from jira import JIRA
 from dopplersdk import DopplerSDK
 
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.expanduser(os.path.join(BASE_DIR, "jira_tickets.db"))
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # Load Config
 config = configparser.ConfigParser()
@@ -31,8 +31,30 @@ try:
     )
     JIRA_SERVER = config.get("JIRA", "server")
     JIRA_EMAIL = config.get("JIRA", "user")
+    HOME_DIR = os.path.expanduser(os.path.join("~", config.get("config", "home")))
+    DB_NAME = config.get("config", "db_name")
 except (configparser.NoSectionError, configparser.NoOptionError) as e:
     print(f"FATAL: Missing configuration in config.ini: {e}")
+    sys.exit(1)
+
+# NOTE: DB_PATH is anchored to HOME_DIR (not BASE_DIR / __file__) so that every
+# copy of this script (dev checkout, installed launchd copy, etc.) shares the
+# exact same ticket-state database. Otherwise each copy tracks "printed" state
+# independently and the same ticket gets printed once per running copy.
+os.makedirs(HOME_DIR, exist_ok=True)
+DB_PATH = os.path.join(HOME_DIR, DB_NAME)
+LOCK_PATH = os.path.join(HOME_DIR, "jira_watcher.lock")
+
+# --- SINGLE-INSTANCE GUARD ---
+# Prevents two watcher processes (e.g. a manual `make run` while the launchd
+# service is already alive) from racing on the same tickets and each printing
+# them. The lock is held for the life of the process and released automatically
+# by the OS on exit/crash.
+_lock_file = open(LOCK_PATH, "w")
+try:
+    fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print("FATAL: Another jira_watcher instance is already running. Exiting.")
     sys.exit(1)
 
 try:
@@ -70,26 +92,38 @@ jira = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_EMAIL, _jira_token))
 
 # --- STATE MANAGEMENT ---
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
+    with contextlib.closing(sqlite3.connect(DB_PATH)) as conn, conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS ticket_state (id TEXT PRIMARY KEY, last_status TEXT, printed INTEGER)"
         )
 
 
-def get_last_status(issue_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        res = conn.execute(
-            "SELECT last_status, printed FROM ticket_state WHERE id=?", (issue_id,)
-        ).fetchone()
-        return res if res else (None, 0)
-
-
 def update_status(issue_id, status, printed=True):
-    with sqlite3.connect(DB_PATH) as conn:
+    with contextlib.closing(sqlite3.connect(DB_PATH)) as conn, conn:
         conn.execute(
             "INSERT OR REPLACE INTO ticket_state (id, last_status, printed) VALUES (?, ?, ?)",
             (issue_id, status, printed),
         )
+
+
+def claim_for_printing(issue_id, status):
+    """Atomically flip printed 0 -> 1 and report whether *this* call won the claim.
+
+    This runs BEFORE the ticket is sent to the printer (not after), so a crash
+    or exception between claiming and printing results in a missed print
+    (recoverable via print_jira.py) rather than a duplicate print on the next
+    poll or on restart.
+    """
+    with contextlib.closing(sqlite3.connect(DB_PATH)) as conn, conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO ticket_state (id, last_status, printed) VALUES (?, ?, 0)",
+            (issue_id, status),
+        )
+        cursor = conn.execute(
+            "UPDATE ticket_state SET printed = 1, last_status = ? WHERE id = ? AND printed = 0",
+            (status, issue_id),
+        )
+        return cursor.rowcount == 1
 
 # --- PRINTING ENGINE ---
 def print_ticket(issue):
@@ -174,18 +208,18 @@ while True:
 
         for issue in issues:
             current_cat = issue.fields.status.statusCategory.name
-            last_cat, is_printed = get_last_status(issue.id)
 
-            # Trigger logic: If it just moved into 'To Do'
-            if current_cat == "To Do" and not is_printed:
-                print(f"TRANSITION: {issue.key} -> To Do. Printing...")
-                print_ticket(issue)
-                update_status(issue.id, current_cat, printed=1)
+            if current_cat == "To Do":
+                # Claim the ticket BEFORE printing. If another poll cycle (or,
+                # defensively, another process sharing this DB) already claimed
+                # it, this returns False and we skip printing entirely.
+                if claim_for_printing(issue.id, current_cat):
+                    print(f"TRANSITION: {issue.key} -> To Do. Printing...")
+                    print_ticket(issue)
             else:
-                # If it's already printed and still in To Do, keep it as 1.
-                # If it moved out of To Do, reset it to 0.
-                printed_flag = 1 if current_cat == "To Do" else 0
-                update_status(issue.id, current_cat, printed=printed_flag)
+                # Ticket moved out of To Do: reset so it prints again if it
+                # ever comes back into To Do.
+                update_status(issue.id, current_cat, printed=0)
 
     except Exception as e:
         print(f"LOOP ERROR: {e}")
